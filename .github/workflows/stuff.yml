@@ -1,0 +1,2 @@
+- name: stuff
+  uses: Azure/appservice-build@v3
