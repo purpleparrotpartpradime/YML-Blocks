@@ -92,12 +92,11 @@
             .node { width: 16px; height: 16px; }
             .block { padding: 6px; }
             .toolbar .block { padding: 8px; }
-            #toggle-toolbar { z-index: 30; }
             #yaml-blocks, #html-elements { max-height: calc(100vh - 80px); }
-            #html-code-editor { max-height: calc(100vh - 120px); }
+            #html-code-editor { max-height: calc(100vh - 48px); }
         }
         @media (min-width: 640px) {
-            #yaml-blocks, #html-elements, #html-code-editor { max-height: calc(100vh - 120px); }
+            #yaml-blocks, #html-elements, #html-code-editor { max-height: calc(100vh - 80px); }
         }
     </style>
 </head>
@@ -254,6 +253,65 @@
                 }
             }
 
+            // Generate HTML from htmlElements
+            function generateHTML() {
+                try {
+                    let html = '<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>Generated Page</title>\n</head>\n<body>\n';
+                    htmlElements.forEach(element => {
+                        const style = `position: absolute; left: ${element.x}px; top: ${element.y}px; width: ${element.width}px; height: ${element.height}px; background-color: ${element.backgroundColor};`;
+                        if (element.type === 'IMG') {
+                            html += `    <${element.type.toLowerCase()} src="${element.content}" style="${style}">\n`;
+                        } else if (element.type === 'A') {
+                            html += `    <${element.type.toLowerCase()} href="${element.content.href}" style="${style}">${element.content.text}</${element.type.toLowerCase()}>\n`;
+                        } else {
+                            html += `    <${element.type.toLowerCase()} style="${style}">${element.content}</${element.type.toLowerCase()}>\n`;
+                        }
+                    });
+                    html += '</body>\n</html>';
+                    return html;
+                } catch (e) {
+                    console.error('Generate HTML error:', e);
+                    return '';
+                }
+            }
+
+            // Generate files for export/save
+            function generateFiles() {
+                try {
+                    const files = {};
+                    tabs.forEach((tab, index) => {
+                        const yamlContent = generateYAML(tab);
+                        files[tab.name] = yamlContent;
+                    });
+                    files['index.html'] = generateHTML();
+                    return files;
+                } catch (e) {
+                    console.error('Generate files error:', e);
+                    return {};
+                }
+            }
+
+            // Generate YAML for a tab
+            function generateYAML(tab) {
+                try {
+                    let yaml = `name: ${tab.name.replace('.yml', '')}\nsteps:\n`;
+                    tab.blocks.forEach(block => {
+                        yaml += `  - id: ${block.id}\n    type: ${block.type}\n    x: ${block.x}\n    y: ${block.y}\n`;
+                        if (block.type === 'VARIABLE' || block.type === 'CALC_METHOD') {
+                            yaml += `    value: ${block.value}\n`;
+                        }
+                    });
+                    yaml += 'wires:\n';
+                    tab.wires.forEach(wire => {
+                        yaml += `  - from: ${wire.from.block.id}:${wire.from.index}\n    to: ${wire.to.block.id}:${wire.to.index}\n`;
+                    });
+                    return yaml;
+                } catch (e) {
+                    console.error('Generate YAML error:', e);
+                    return '';
+                }
+            }
+
             // Responsive canvas sizing
             function resizeCanvases() {
                 try {
@@ -273,6 +331,7 @@
             }
 
             window.addEventListener('resize', resizeCanvases);
+            resizeCanvases();
 
             // Toolbar toggle for mobile
             const toolbar = document.getElementById('toolbar');
@@ -296,20 +355,23 @@
             if (toggleToolbarBtn) {
                 toggleToolbarBtn.addEventListener('click', () => {
                     try {
-                        if (toolbar && closeToolbarBtn && toggleToolbarBtn && overlay) {
-                            toolbar.classList.add('open');
-                            closeToolbarBtn.classList.remove('hidden');
-                            toggleToolbarBtn.classList.add('hidden');
-                            overlay.classList.remove('hidden');
-                        }
+                        toolbar.classList.add('open');
+                        closeToolbarBtn.classList.remove('hidden');
+                        toggleToolbarBtn.classList.add('hidden');
+                        overlay.classList.remove('hidden');
                     } catch (e) {
                         console.error('Toggle toolbar error:', e);
                     }
                 });
             }
 
-            if (closeToolbarBtn) closeToolbarBtn.addEventListener('click', closeToolbar);
-            if (overlay) overlay.addEventListener('click', closeToolbar);
+            if (closeToolbarBtn) {
+                closeToolbarBtn.addEventListener('click', closeToolbar);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', closeToolbar);
+            }
 
             // Initialize toolbar block events
             document.querySelectorAll('.block').forEach(block => {
@@ -385,6 +447,7 @@
                         if (window.innerWidth < 640) closeToolbar();
                     } catch (e) {
                         console.error('Block click error:', e);
+                        alert('Failed to add block: ' + e.message);
                     }
                 });
             });
@@ -426,6 +489,7 @@
                         }
                     } catch (e) {
                         console.error('Canvas drop error:', e);
+                        alert('Failed to drop block: ' + e.message);
                     }
                 });
             }
@@ -456,6 +520,7 @@
                         }
                     } catch (e) {
                         console.error('HTML canvas drop error:', e);
+                        alert('Failed to drop element: ' + e.message);
                     }
                 });
             }
@@ -480,6 +545,7 @@
                                 draw();
                             } catch (e) {
                                 console.error('Dropdown select error:', e);
+                                alert('Failed to select method: ' + e.message);
                             }
                         });
                         dropdown.appendChild(item);
@@ -487,6 +553,7 @@
                     document.body.appendChild(dropdown);
                 } catch (e) {
                     console.error('Show dropdown error:', e);
+                    alert('Failed to show dropdown: ' + e.message);
                 }
             }
 
@@ -499,6 +566,7 @@
                             element.content = src;
                         } else if (src) {
                             alert('Invalid URL. Must start with http:// or https://');
+                            return;
                         }
                     } else if (element.type === 'A') {
                         const text = prompt('Enter link text:', element.content.text);
@@ -507,6 +575,7 @@
                             element.content = { text, href };
                         } else if (href && !/^https?:\/\/.+$/.test(href)) {
                             alert('Invalid URL. Must start with http:// or https://');
+                            return;
                         }
                     } else {
                         const content = prompt(`Enter content for ${element.type.toLowerCase()}:`, element.content);
@@ -544,7 +613,6 @@
                     } else if (activeTab === 'html' && activeHtmlSubTab === 'visual') {
                         for (let element of htmlElements) {
                             if (x >= element.x && x <= element.x + element.width && y >= element.y && y <= element.y + element.height) {
-                                // Check for resize handle
                                 const resizeHandleSize = 10;
                                 if (x >= element.x + element.width - resizeHandleSize && y >= element.y + element.height - resizeHandleSize) {
                                     resizingElement = element;
@@ -569,13 +637,14 @@
                     if (isTouch && !e.touches?.length) return;
                     const { x, y } = getCanvasPosition(isTouch ? e : e, activeTab === 'yaml' ? canvas : htmlCanvas, isTouch);
                     if (draggingBlock) {
-                        draggingBlock.x = x - offsetX;
-                        draggingBlock.y = y - offsetY;
+                        const snapDistance = window.innerWidth < 640 ? 30 : 25;
+                        draggingBlock.x = Math.round((x - offsetX) / snapDistance) * snapDistance;
+                        draggingBlock.y = Math.round((y - offsetY) / snapDistance) * snapDistance;
                         if (activeTab === 'html') updateHtmlCodeEditor();
                         activeTab === 'yaml' ? draw() : drawHtmlCanvas();
                     } else if (resizingElement) {
-                        resizingElement.width = Math.max(50, x - resizingElement.x - offsetX);
-                        resizingElement.height = Math.max(50, y - resizingElement.y - offsetY);
+                        resizingElement.width = Math.max(50, Math.round((x - resizingElement.x - offsetX) / 10) * 10);
+                        resizingElement.height = Math.max(50, Math.round((y - resizingElement.y - offsetY) / 10) * 10);
                         updateHtmlCodeEditor();
                         drawHtmlCanvas();
                     } else if (draggingWire && ctx) {
@@ -615,9 +684,9 @@
                         const maxDistance = window.innerWidth < 640 ? 30 : 25;
                         if (closestNode && targetBlock && draggingWire.node.type === 'output' && minDistance < maxDistance) {
                             if (targetBlock.type === 'MATH' && closestNode.index === 0 && draggingWire.block.type !== 'CALC_METHOD') {
-                                console.log(`Invalid connection: MATH block input 0 requires CALC_METHOD, got ${draggingWire.block.type}`);
+                                alert(`Invalid connection: MATH block input 0 requires CALC_METHOD, got ${draggingWire.block.type}`);
                             } else if (targetBlock.type === 'MATH' && closestNode.index > 0 && draggingWire.block.type !== 'VARIABLE') {
-                                console.log(`Invalid connection: MATH block inputs 1 and 2 require VARIABLE, got ${draggingWire.block.type}`);
+                                alert(`Invalid connection: MATH block inputs 1 and 2 require VARIABLE, got ${draggingWire.block.type}`);
                             } else {
                                 tabs[currentTab].wires.push({
                                     from: { block: draggingWire.block, index: draggingWire.node.index },
@@ -639,14 +708,7 @@
                 canvas.addEventListener('mousedown', handleStart);
                 canvas.addEventListener('mousemove', handleMove);
                 canvas.addEventListener('mouseup', handleEnd);
-                canvas.addEventListener('touchstart', (e) => {
-                    try {
-                        touchStartTime = Date.now();
-                        handleStart(e, true);
-                    } catch (e) {
-                        console.error('Canvas touchstart error:', e);
-                    }
-                });
+                canvas.addEventListener('touchstart', (e) => handleStart(e, true));
                 canvas.addEventListener('touchmove', (e) => handleMove(e, true));
                 canvas.addEventListener('touchend', (e) => {
                     try {
@@ -667,12 +729,21 @@
                             if (x >= block.x && x <= block.x + blockWidth && y >= block.y && y <= block.y + blockHeight) {
                                 if (block.type === 'CALC_METHOD') {
                                     showMethodDropdown(block, e.clientX, e.clientY);
+                                } else if (block.type === 'VARIABLE') {
+                                    const value = prompt('Enter variable value:', block.value);
+                                    if (value && !isNaN(value)) {
+                                        block.value = Number(value);
+                                        draw();
+                                    } else if (value) {
+                                        alert('Invalid value: must be a number.');
+                                    }
                                 }
                                 break;
                             }
                         }
                     } catch (e) {
                         console.error('Canvas dblclick error:', e);
+                        alert('Failed to edit block: ' + e.message);
                     }
                 });
             }
@@ -681,14 +752,7 @@
                 htmlCanvas.addEventListener('mousedown', handleStart);
                 htmlCanvas.addEventListener('mousemove', handleMove);
                 htmlCanvas.addEventListener('mouseup', handleEnd);
-                htmlCanvas.addEventListener('touchstart', (e) => {
-                    try {
-                        touchStartTime = Date.now();
-                        handleStart(e, true);
-                    } catch (e) {
-                        console.error('HTML canvas touchstart error:', e);
-                    }
-                });
+                htmlCanvas.addEventListener('touchstart', (e) => handleStart(e, true));
                 htmlCanvas.addEventListener('touchmove', (e) => handleMove(e, true));
                 htmlCanvas.addEventListener('touchend', (e) => {
                     try {
@@ -725,6 +789,7 @@
                         }
                     } catch (e) {
                         console.error('HTML canvas click error:', e);
+                        alert('Failed to change color: ' + e.message);
                     }
                 });
                 htmlCanvas.addEventListener('dblclick', (e) => {
@@ -738,29 +803,9 @@
                         }
                     } catch (e) {
                         console.error('HTML canvas dblclick error:', e);
+                        alert('Failed to edit element: ' + e.message);
                     }
                 });
-            }
-
-            function isNearNode(block, x, y) {
-                try {
-                    const nodeSize = window.innerWidth < 640 ? 10 : 8;
-                    const hitbox = window.innerWidth < 640 ? 30 : 25;
-                    for (let i = 0; i < block.inputs; i++) {
-                        const nodeX = block.x;
-                        const nodeY = block.y + 20 + (block.type === 'MATH' && i === 0 ? blockTypes[block.type].height / 2 : i * 30);
-                        if (Math.hypot(x - nodeX, y - nodeY) < hitbox) return true;
-                    }
-                    for (let i = 0; i < block.outputs; i++) {
-                        const nodeX = block.x + (window.innerWidth < 640 ? 150 : 200);
-                        const nodeY = block.y + 20 + i * 30;
-                        if (Math.hypot(x - nodeX, y - nodeY) < hitbox) return true;
-                    }
-                    return false;
-                } catch (e) {
-                    console.error('isNearNode error:', e);
-                    return false;
-                }
             }
 
             function getNode(block, x, y, inputOnly = false) {
@@ -894,6 +939,10 @@
                     const html = htmlCodeTextarea.value;
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(html, 'text/html');
+                    if (doc.querySelector('parsererror')) {
+                        alert('Invalid HTML code: parsing error.');
+                        return;
+                    }
                     const body = doc.body;
                     const newElements = [];
                     const blockWidth = window.innerWidth < 640 ? 100 : 150;
@@ -905,11 +954,13 @@
                             const width = parseInt(style.width) || blockWidth;
                             const height = parseInt(style.height) || blockHeight;
                             const backgroundColor = style.backgroundColor || '#4b5563';
+                            const x = parseInt(style.left) || 20;
+                            const y = parseInt(style.top) || yOffset;
                             const element = {
                                 id: Date.now() + Math.random(),
                                 type: node.tagName,
-                                x: 20,
-                                y: yOffset,
+                                x,
+                                y,
                                 width: Math.max(50, width),
                                 height: Math.max(50, height),
                                 backgroundColor,
@@ -935,88 +986,70 @@
             function switchToYamlTab() {
                 try {
                     activeTab = 'yaml';
-                    const yamlEditor = document.getElementById('yaml-editor');
-                    const htmlEditor = document.getElementById('html-editor');
-                    const yamlBlocks = document.getElementById('yaml-blocks');
-                    const htmlElementsDiv = document.getElementById('html-elements');
-                    const yamlTab = document.getElementById('yaml-tab');
-                    const htmlTab = document.getElementById('html-tab');
-                    if (yamlEditor) yamlEditor.classList.remove('hidden');
-                    if (htmlEditor) htmlEditor.classList.add('hidden');
-                    if (yamlBlocks) yamlBlocks.classList.remove('hidden');
-                    if (htmlElementsDiv) htmlElementsDiv.classList.add('hidden');
-                    if (yamlTab) yamlTab.classList.add('active');
-                    if (htmlTab) htmlTab.classList.remove('active');
+                    document.getElementById('yaml-editor')?.classList.remove('hidden');
+                    document.getElementById('html-editor')?.classList.add('hidden');
+                    document.getElementById('yaml-blocks')?.classList.remove('hidden');
+                    document.getElementById('html-elements')?.classList.add('hidden');
+                    document.getElementById('yaml-tab')?.classList.add('active');
+                    document.getElementById('html-tab')?.classList.remove('active');
                     if (window.innerWidth < 640) closeToolbar();
                     draw();
                 } catch (e) {
                     console.error('Switch to YAML tab error:', e);
+                    alert('Failed to switch to YAML tab: ' + e.message);
                 }
             }
 
             function switchToHtmlTab() {
                 try {
                     activeTab = 'html';
-                    const yamlEditor = document.getElementById('yaml-editor');
-                    const htmlEditor = document.getElementById('html-editor');
-                    const yamlBlocks = document.getElementById('yaml-blocks');
-                    const htmlElementsDiv = document.getElementById('html-elements');
-                    const yamlTab = document.getElementById('yaml-tab');
-                    const htmlTab = document.getElementById('html-tab');
-                    if (yamlEditor) yamlEditor.classList.add('hidden');
-                    if (htmlEditor) htmlEditor.classList.remove('hidden');
-                    if (yamlBlocks) yamlBlocks.classList.add('hidden');
-                    if (htmlElementsDiv) htmlElementsDiv.classList.remove('hidden');
+                    document.getElementById('yaml-editor')?.classList.add('hidden');
+                    document.getElementById('html-editor')?.classList.remove('hidden');
+                    document.getElementById('yaml-blocks')?.classList.add('hidden');
+                    document.getElementById('html-elements')?.classList.remove('hidden');
+                    document.getElementById('yaml-tab')?.classList.remove('active');
+                    document.getElementById('html-tab')?.classList.add('active');
                     if (window.innerWidth < 640) closeToolbar();
                     updateHtmlCodeEditor();
                     drawHtmlCanvas();
                 } catch (e) {
                     console.error('Switch to HTML tab error:', e);
+                    alert('Failed to switch to HTML tab: ' + e.message);
                 }
             }
 
             function switchToVisualSubTab() {
                 try {
                     activeHtmlSubTab = 'visual';
-                    const visualEditor = document.getElementById('html-visual-editor');
-                    const codeEditor = document.getElementById('html-code-editor');
-                    const visualTab = document.getElementById('visual-sub-tab');
-                    const codeTab = document.getElementById('code-sub-tab');
-                    if (visualEditor) visualEditor.classList.remove('hidden');
-                    if (codeEditor) codeEditor.classList.add('hidden');
-                    if (visualTab) visualTab.classList.add('active');
-                    if (codeTab) codeTab.classList.remove('active');
+                    document.getElementById('html-visual-editor')?.classList.remove('hidden');
+                    document.getElementById('html-code-editor')?.classList.add('hidden');
+                    document.getElementById('visual-sub-tab')?.classList.add('active');
+                    document.getElementById('code-sub-tab')?.classList.remove('active');
                     drawHtmlCanvas();
                 } catch (e) {
                     console.error('Switch to Visual sub-tab error:', e);
+                    alert('Failed to switch to Visual Editor: ' + e.message);
                 }
             }
 
             function switchToCodeSubTab() {
                 try {
                     activeHtmlSubTab = 'code';
-                    const visualEditor = document.getElementById('html-visual-editor');
-                    const codeEditor = document.getElementById('html-code-editor');
-                    const visualTab = document.getElementById('visual-sub-tab');
-                    const codeTab = document.getElementById('code-sub-tab');
-                    if (visualEditor) visualEditor.classList.add('hidden');
-                    if (codeEditor) codeEditor.classList.remove('hidden');
-                    if (visualTab) visualTab.classList.remove('active');
-                    if (codeTab) codeTab.classList.add('active');
+                    document.getElementById('html-visual-editor')?.classList.add('hidden');
+                    document.getElementById('html-code-editor')?.classList.remove('hidden');
+                    document.getElementById('visual-sub-tab')?.classList.remove('active');
+                    document.getElementById('code-sub-tab')?.classList.add('active');
                     updateHtmlCodeEditor();
                 } catch (e) {
                     console.error('Switch to Code sub-tab error:', e);
+                    alert('Failed to switch to Code Editor: ' + e.message);
                 }
             }
 
-            const yamlTabBtn = document.getElementById('yaml-tab');
-            const htmlTabBtn = document.getElementById('html-tab');
-            const visualSubTabBtn = document.getElementById('visual-sub-tab');
-            const codeSubTabBtn = document.getElementById('code-sub-tab');
-            if (yamlTabBtn) yamlTabBtn.addEventListener('click', switchToYamlTab);
-            if (htmlTabBtn) htmlTabBtn.addEventListener('click', switchToHtmlTab);
-            if (visualSubTabBtn) visualSubTabBtn.addEventListener('click', switchToVisualSubTab);
-            if (codeSubTabBtn) codeSubTabBtn.addEventListener('click', switchToCodeSubTab);
+            document.getElementById('yaml-tab')?.addEventListener('click', switchToYamlTab);
+            document.getElementById('html-tab')?.addEventListener('click', switchToHtmlTab);
+            document.getElementById('visual-sub-tab')?.addEventListener('click', switchToVisualSubTab);
+            document.getElementById('code-sub-tab')?.addEventListener('click', switchToCodeSubTab);
 
             // Code Editor input handling
             if (htmlCodeTextarea) {
@@ -1040,9 +1073,14 @@
                         tabEl.className = `px-2 py-1 bg-gray-700 text-white text-xs sm:text-sm rounded cursor-pointer ${index === currentTab ? 'bg-blue-600' : ''}`;
                         tabEl.textContent = tab.name;
                         tabEl.addEventListener('click', () => {
-                            currentTab = index;
-                            updateTabs();
-                            draw();
+                            try {
+                                currentTab = index;
+                                updateTabs();
+                                draw();
+                            } catch (e) {
+                                console.error('Tab click error:', e);
+                                alert('Failed to switch tab: ' + e.message);
+                            }
                         });
                         tabBar.appendChild(tabEl);
                     });
@@ -1051,22 +1089,20 @@
                 }
             }
 
-            const newTabBtn = document.getElementById('new-tab-btn');
-            if (newTabBtn) {
-                newTabBtn.addEventListener('click', () => {
-                    try {
-                        const name = prompt('Enter tab name:', `file${tabs.length + 1}.yml`);
-                        if (name) {
-                            tabs.push({ name, blocks: [], wires: [] });
-                            currentTab = tabs.length - 1;
-                            updateTabs();
-                            draw();
-                        }
-                    } catch (e) {
-                        console.error('New tab error:', e);
+            document.getElementById('new-tab-btn')?.addEventListener('click', () => {
+                try {
+                    const name = prompt('Enter tab name:', `file${tabs.length + 1}.yml`);
+                    if (name) {
+                        tabs.push({ name, blocks: [], wires: [] });
+                        currentTab = tabs.length - 1;
+                        updateTabs();
+                        draw();
                     }
-                });
-            }
+                } catch (e) {
+                    console.error('New tab error:', e);
+                    alert('Failed to create new tab: ' + e.message);
+                }
+            });
 
             // GitHub API functions
             async function saveToGitHub(pat, repo, files, secrets, variables) {
@@ -1075,13 +1111,11 @@
                     if (!owner || !repoName) throw new Error('Invalid repository format. Use owner/repo.');
                     if (!validatePAT(pat)) throw new Error('Invalid PAT format.');
 
-                    // Test PAT permissions
                     const userResponse = await fetch('https://api.github.com/user', {
                         headers: { Authorization: `Bearer ${pat}` }
                     });
                     if (!userResponse.ok) throw new Error('Invalid PAT or insufficient permissions.');
 
-                    // Save files
                     for (const [path, content] of Object.entries(files)) {
                         const existingFile = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${path}`, {
                             headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json' }
@@ -1098,14 +1132,13 @@
                         });
                     }
 
-                    // Save secrets
                     for (const [name, value] of Object.entries(secrets)) {
                         const keyResponse = await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/secrets/public-key`, {
                             headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json' }
                         });
                         if (!keyResponse.ok) throw new Error('Failed to fetch public key for secrets.');
                         const { key_id, key } = await keyResponse.json();
-                        const encryptedValue = await encryptSecret(key, value); // Requires crypto library
+                        const encryptedValue = await encryptSecret(key, value);
                         await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/secrets/${name}`, {
                             method: 'PUT',
                             headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json' },
@@ -1113,7 +1146,6 @@
                         });
                     }
 
-                    // Save variables
                     for (const [name, value] of Object.entries(variables)) {
                         await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/variables/${name}`, {
                             method: 'PUT',
@@ -1135,13 +1167,11 @@
                     if (!owner || !repoName) throw new Error('Invalid repository format. Use owner/repo.');
                     if (!validatePAT(pat)) throw new Error('Invalid PAT format.');
 
-                    // Test PAT permissions
                     const userResponse = await fetch('https://api.github.com/user', {
                         headers: { Authorization: `Bearer ${pat}` }
                     });
                     if (!userResponse.ok) throw new Error('Invalid PAT or insufficient permissions.');
 
-                    // Fetch repository contents
                     const contents = [];
                     async function fetchContents(path = '') {
                         const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}/contents/${path}`, {
@@ -1160,17 +1190,15 @@
                     }
                     await fetchContents();
 
-                    // Fetch secrets
                     const secretsResponse = await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/secrets`, {
                         headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json' }
                     });
                     const secretsData = await secretsResponse.json();
                     const secrets = {};
                     for (const secret of secretsData.secrets) {
-                        secrets[secret.name] = '***'; // Cannot retrieve secret values
+                        secrets[secret.name] = '***';
                     }
 
-                    // Fetch variables
                     const variablesResponse = await fetch(`https://api.github.com/repos/${owner}/${repoName}/actions/variables`, {
                         headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github.v3+json' }
                     });
@@ -1180,7 +1208,6 @@
                         variables[variable.name] = variable.value;
                     }
 
-                    // Parse .gwf or workspace.json
                     const workspaceFile = contents.find(f => f.path.endsWith('.gwf') || f.path === 'workspace.json');
                     let workspace = { tabs: [], htmlElements: [], files: [], secrets: {}, variables: {} };
                     if (workspaceFile && workspaceFile.path.endsWith('.gwf')) {
@@ -1205,10 +1232,16 @@
                 }
             }
 
-            // Placeholder for secret encryption
+            // Placeholder for secret encryption (client-side simplified)
             async function encryptSecret(publicKey, secretValue) {
-                console.warn('Secret encryption not implemented in client-side. Use server-side encryption.');
-                return btoa(secretValue); // Simplified for demo
+                try {
+                    // Note: Proper encryption requires a library like libsodium
+                    console.warn('Using simplified base64 encoding for secrets. Use server-side encryption for production.');
+                    return btoa(secretValue);
+                } catch (e) {
+                    console.error('Encrypt secret error:', e);
+                    throw e;
+                }
             }
 
             // Export to .gwf
@@ -1240,122 +1273,23 @@
                 }
             }
 
-            // Import/Export
-            const exportBtn = document.getElementById('export-btn');
-            if (exportBtn) {
-                exportBtn.addEventListener('click', () => {
-                    try {
-                        exportToGWF();
-                    } catch (e) {
-                        console.error('Export error:', e);
-                        alert('Failed to export workspace: ' + e.message);
-                    }
-                });
-            }
+            // Import/Export buttons
+            document.getElementById('export-btn')?.addEventListener('click', () => {
+                try {
+                    exportToGWF();
+                } catch (e) {
+                    console.error('Export error:', e);
+                    alert('Failed to export workspace: ' + e.message);
+                }
+            });
 
-            const importBtn = document.getElementById('import-btn');
-            if (importBtn) {
-                importBtn.addEventListener('click', () => {
-                    try {
-                        const useGitHub = confirm('Import from GitHub repository? (Click Cancel to import from a .gwf file)');
-                        if (useGitHub) {
-                            const pat = document.getElementById('github-pat')?.value;
-                            if (!pat) {
-                                alert('Please enter a GitHub PAT.');
-                                return;
-                            }
-                            if (!validatePAT(pat)) {
-                                alert('Invalid PAT format.');
-                                return;
-                            }
-                            const repo = prompt('Enter GitHub repository (owner/repo):');
-                            if (repo) {
-                                importFromGitHub(pat, repo).then(workspace => {
-                                    tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
-                                    htmlElements = workspace.htmlElements || [];
-                                    currentTab = 0;
-                                    updateTabs();
-                                    draw();
-                                    updateHtmlCodeEditor();
-                                    drawHtmlCanvas();
-                                    alert('Workspace imported from GitHub.');
-                                    document.getElementById('github-pat').value = '';
-                                }).catch(e => {
-                                    alert('Failed to import from GitHub: ' + e.message);
-                                });
-                            }
-                        } else {
-                            const input = document.createElement('input');
-                            input.type = 'file';
-                            input.accept = '.gwf,.json';
-                            input.onchange = async (e) => {
-                                try {
-                                    const file = e.target.files[0];
-                                    if (!file) return;
-                                    if (file.name.endsWith('.gwf')) {
-                                        const reader = new FileReader();
-                                        reader.onload = async (event) => {
-                                            try {
-                                                const zip = await JSZip.loadAsync(event.target.result);
-                                                const manifest = await zip.file('manifest.json')?.async('string');
-                                                if (!manifest) throw new Error('Invalid .gwf file: manifest.json missing.');
-                                                const workspace = JSON.parse(manifest);
-                                                tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
-                                                htmlElements = workspace.htmlElements || [];
-                                                currentTab = 0;
-                                                updateTabs();
-                                                draw();
-                                                updateHtmlCodeEditor();
-                                                drawHtmlCanvas();
-                                                alert('Workspace imported from .gwf file.');
-                                            } catch (e) {
-                                                console.error('Import GWF parse error:', e);
-                                                alert('Failed to import .gwf file: ' + e.message);
-                                            }
-                                        };
-                                        reader.readAsArrayBuffer(file);
-                                    } else if (file.name.endsWith('.json')) {
-                                        const reader = new FileReader();
-                                        reader.onload = (event) => {
-                                            try {
-                                                const workspace = JSON.parse(event.target.result);
-                                                tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
-                                                htmlElements = workspace.htmlElements || [];
-                                                currentTab = 0;
-                                                updateTabs();
-                                                draw();
-                                                updateHtmlCodeEditor();
-                                                drawHtmlCanvas();
-                                                alert('Workspace imported from .json file.');
-                                            } catch (e) {
-                                                console.error('Import JSON parse error:', e);
-                                                alert('Failed to import .json file: ' + e.message);
-                                            }
-                                        };
-                                        reader.readAsText(file);
-                                    }
-                                } catch (e) {
-                                    console.error('Import file error:', e);
-                                    alert('Failed to import workspace: ' + e.message);
-                                }
-                            };
-                            input.click();
-                        }
-                    } catch (e) {
-                        console.error('Import error:', e);
-                        alert('Failed to import workspace: ' + e.message);
-                    }
-                });
-            }
-
-            // Save to GitHub
-            const saveBtn = document.getElementById('save-btn');
-            if (saveBtn) {
-                saveBtn.addEventListener('click', () => {
-                    try {
+            document.getElementById('import-btn')?.addEventListener('click', () => {
+                try {
+                    const useGitHub = confirm('Import from GitHub repository? (Click Cancel to import from a .gwf file)');
+                    if (useGitHub) {
                         const pat = document.getElementById('github-pat')?.value;
                         if (!pat) {
-                            alert('Please enter a GitHub PAT. For security, create a PAT with an expiration date.');
+                            alert('Please enter a GitHub PAT.');
                             return;
                         }
                         if (!validatePAT(pat)) {
@@ -1364,6 +1298,120 @@
                         }
                         const repo = prompt('Enter GitHub repository (owner/repo):');
                         if (repo) {
-                            const files = generateFiles();
-                            files['scripts/script.js'] = '// Example script\nconsole.log("Hello from ActionStack");';
-                            files['resources/style
+                            importFromGitHub(pat, repo).then(workspace => {
+                                tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
+                                htmlElements = workspace.htmlElements || [];
+                                currentTab = 0;
+                                updateTabs();
+                                draw();
+                                updateHtmlCodeEditor();
+                                drawHtmlCanvas();
+                                alert('Workspace imported from GitHub.');
+                                document.getElementById('github-pat').value = '';
+                            }).catch(e => {
+                                alert('Failed to import from GitHub: ' + e.message);
+                            });
+                        }
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.gwf,.json';
+                        input.onchange = async (e) => {
+                            try {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                if (file.name.endsWith('.gwf')) {
+                                    const reader = new FileReader();
+                                    reader.onload = async (event) => {
+                                        try {
+                                            const zip = await JSZip.loadAsync(event.target.result);
+                                            const manifest = await zip.file('manifest.json')?.async('string');
+                                            if (!manifest) throw new Error('Invalid .gwf file: manifest.json missing.');
+                                            const workspace = JSON.parse(manifest);
+                                            tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
+                                            htmlElements = workspace.htmlElements || [];
+                                            currentTab = 0;
+                                            updateTabs();
+                                            draw();
+                                            updateHtmlCodeEditor();
+                                            drawHtmlCanvas();
+                                            alert('Workspace imported from .gwf file.');
+                                        } catch (e) {
+                                            console.error('Import GWF parse error:', e);
+                                            alert('Failed to import .gwf file: ' + e.message);
+                                        }
+                                    };
+                                    reader.readAsArrayBuffer(file);
+                                } else if (file.name.endsWith('.json')) {
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        try {
+                                            const workspace = JSON.parse(event.target.result);
+                                            tabs = workspace.tabs || [{ name: 'main.yml', blocks: [], wires: [] }];
+                                            htmlElements = workspace.htmlElements || [];
+                                            currentTab = 0;
+                                            updateTabs();
+                                            draw();
+                                            updateHtmlCodeEditor();
+                                            drawHtmlCanvas();
+                                            alert('Workspace imported from .json file.');
+                                        } catch (e) {
+                                            console.error('Import JSON parse error:', e);
+                                            alert('Failed to import .json file: ' + e.message);
+                                        }
+                                    };
+                                    reader.readAsText(file);
+                                }
+                            } catch (e) {
+                                console.error('Import file error:', e);
+                                alert('Failed to import workspace: ' + e.message);
+                            }
+                        };
+                        input.click();
+                    }
+                } catch (e) {
+                    console.error('Import error:', e);
+                    alert('Failed to import workspace: ' + e.message);
+                }
+            });
+
+            document.getElementById('save-btn')?.addEventListener('click', () => {
+                try {
+                    const pat = document.getElementById('github-pat')?.value;
+                    if (!pat) {
+                        alert('Please enter a GitHub PAT. For security, create a PAT with an expiration date.');
+                        return;
+                    }
+                    if (!validatePAT(pat)) {
+                        alert('Invalid PAT format.');
+                        return;
+                    }
+                    const repo = prompt('Enter GitHub repository (owner/repo):');
+                    if (repo) {
+                        const files = generateFiles();
+                        files['scripts/script.js'] = '// Example script\nconsole.log("Hello from ActionStack");';
+                        files['resources/style.css'] = '/* Example CSS */\nbody { background-color: #f0f0f0; }';
+                        const secrets = { EXAMPLE_SECRET: 'example_value' };
+                        const variables = { ENV: 'prod' };
+                        saveToGitHub(pat, repo, files, secrets, variables).then(() => {
+                            alert('Workspace saved to GitHub.');
+                            document.getElementById('github-pat').value = '';
+                        }).catch(e => {
+                            alert('Failed to save to GitHub: ' + e.message);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Save error:', e);
+                    alert('Failed to save workspace: ' + e.message);
+                }
+            });
+
+            // Initialize
+            updateTabs();
+            draw();
+            updateHtmlCodeEditor();
+            drawHtmlCanvas();
+        });
+    </script>
+</body>
+</html>
